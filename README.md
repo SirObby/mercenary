@@ -7,3 +7,15 @@ An optimization and performance focused ActivityPub server, using [mongoose](htt
 - [ ] Database integration
 - [ ] ActivityPub
 - [ ] Oauth2
+
+## ActivityPub Implemented fields:
+- [ ] Actor
+- [ ] Inbox
+- [ ] Outbox
+- [ ] Followers Collection
+- [ ] Following Collection
+- [ ] Liked Collection
+- [ ] Public Addressing
+- [ ] Likes Collection
+- [ ] Shares Collection
+- [ ] Activities (i.e. Notes)
