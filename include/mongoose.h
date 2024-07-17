@@ -20,14 +20,14 @@
 #ifndef MONGOOSE_H
 #define MONGOOSE_H
 
-#define MG_VERSION "7.13"
+#define MG_VERSION "7.14"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 
-#define MG_ARCH_CUSTOM 0        // User creates its own mongoose_custom.h
+#define MG_ARCH_CUSTOM 0        // User creates its own mongoose_config.h
 #define MG_ARCH_UNIX 1          // Linux, BSD, Mac, ...
 #define MG_ARCH_WIN32 2         // Windows
 #define MG_ARCH_ESP32 3         // ESP32
@@ -48,30 +48,15 @@ extern "C" {
 #define MG_ARCH MG_ARCH_UNIX
 #elif defined(_WIN32)
 #define MG_ARCH MG_ARCH_WIN32
-#elif defined(ICACHE_FLASH) || defined(ICACHE_RAM_ATTR)
-#define MG_ARCH MG_ARCH_ESP8266
-#elif defined(__ZEPHYR__)
-#define MG_ARCH MG_ARCH_ZEPHYR
-#elif defined(ESP_PLATFORM)
-#define MG_ARCH MG_ARCH_ESP32
-#elif defined(FREERTOS_IP_H)
-#define MG_ARCH MG_ARCH_FREERTOS
-#define MG_ENABLE_FREERTOS_TCP 1
-#elif defined(AZURE_RTOS_THREADX)
-#define MG_ARCH MG_ARCH_AZURERTOS
-#elif defined(PICO_TARGET_NAME)
-#define MG_ARCH MG_ARCH_RP2040
-#elif defined(__RTTHREAD__)
-#define MG_ARCH MG_ARCH_RTTHREAD
 #endif
 #endif  // !defined(MG_ARCH)
 
 #if !defined(MG_ARCH) || (MG_ARCH == MG_ARCH_CUSTOM)
-#include "mongoose_custom.h"  // keep this include
+#include "mongoose_config.h"  // keep this include
 #endif
 
 #if !defined(MG_ARCH)
-#error "MG_ARCH is not specified and we couldn't guess it. Set -D MG_ARCH=..."
+#error "MG_ARCH is not specified and we couldn't guess it. Define MG_ARCH=... in your compiler"
 #endif
 
 // http://esr.ibiblio.org/?p=5095
@@ -135,7 +120,8 @@ extern "C" {
 #include <sys/types.h>
 #include <time.h>
 
-#include <esp_timer.h>
+#include <esp_ota_ops.h>  // Use angle brackets to avoid
+#include <esp_timer.h>    // amalgamation ditching them
 
 #define MG_PATH_MAX 128
 
@@ -200,7 +186,7 @@ extern "C" {
 #define calloc(a, b) mg_calloc(a, b)
 #define free(a) vPortFree(a)
 #define malloc(a) pvPortMalloc(a)
-#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).buf)
 
 // Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
 static inline void *mg_calloc(size_t cnt, size_t size) {
@@ -302,7 +288,7 @@ extern uint32_t rt_time_get(void);
 #include "cmsis_os2.h"  // keep this include
 #endif
 
-#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).buf)
 
 #if defined(__ARMCC_VERSION)
 #define mode_t size_t
@@ -536,7 +522,7 @@ typedef int socklen_t;
 
 #define MG_PUTCHAR(x) printk("%c", x)
 #ifndef strdup
-#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).buf)
 #endif
 #define strerror(x) zsock_gai_strerror(x)
 
@@ -563,7 +549,6 @@ int sscanf(const char *, const char *, ...);
 
 #include <FreeRTOS_IP.h>
 #include <FreeRTOS_Sockets.h>
-#include <FreeRTOS_errno_TCP.h>  // contents to be moved and file removed, some day
 
 #define MG_SOCKET_TYPE Socket_t
 #define MG_INVALID_SOCKET FREERTOS_INVALID_SOCKET
@@ -595,6 +580,9 @@ int sscanf(const char *, const char *, ...);
 
 #define sockaddr_in freertos_sockaddr
 #define sockaddr freertos_sockaddr
+#if ipFR_TCP_VERSION_MAJOR >= 4
+#define sin_addr sin_address.ulIP_IPv4
+#endif
 #define accept(a, b, c) FreeRTOS_accept((a), (b), (c))
 #define connect(a, b, c) FreeRTOS_connect((a), (b), (c))
 #define bind(a, b, c) FreeRTOS_bind((a), (b), (c))
@@ -861,35 +849,25 @@ struct timeval {
 
 
 
+// Describes an arbitrary chunk of memory
 struct mg_str {
-  const char *ptr;  // Pointer to string data
-  size_t len;       // String len
+  char *buf;   // String data
+  size_t len;  // String length
 };
-
-#define MG_C_STR(a) \
-  { (a), sizeof(a) - 1 }
 
 // Using macro to avoid shadowing C++ struct constructor, see #1298
 #define mg_str(s) mg_str_s(s)
 
 struct mg_str mg_str(const char *s);
 struct mg_str mg_str_n(const char *s, size_t n);
-int mg_lower(const char *s);
-int mg_ncasecmp(const char *s1, const char *s2, size_t len);
 int mg_casecmp(const char *s1, const char *s2);
-int mg_vcmp(const struct mg_str *s1, const char *s2);
-int mg_vcasecmp(const struct mg_str *str1, const char *str2);
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
-struct mg_str mg_strstrip(struct mg_str s);
+int mg_strcasecmp(const struct mg_str str1, const struct mg_str str2);
 struct mg_str mg_strdup(const struct mg_str s);
-const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);
 bool mg_match(struct mg_str str, struct mg_str pattern, struct mg_str *caps);
-bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
 bool mg_span(struct mg_str s, struct mg_str *a, struct mg_str *b, char delim);
-char *mg_hex(const void *buf, size_t len, char *dst);
-void mg_unhex(const char *buf, size_t len, unsigned char *to);
-unsigned long mg_unhexn(const char *s, size_t len);
-bool mg_path_is_sane(const char *path);
+
+bool mg_str_to_num(struct mg_str, int base, void *val, size_t val_len);
 
 
 
@@ -1076,7 +1054,7 @@ uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
 uint64_t mg_millis(void);  // Return milliseconds since boot
-uint64_t mg_now(void);     // Return milliseconds since Epoch
+bool mg_path_is_sane(const struct mg_str path);
 
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
@@ -1688,6 +1666,111 @@ int mg_uecc_verify(const uint8_t *public_key, const uint8_t *message_hash,
 
 /* Copyright 2015, Kenneth MacKay. Licensed under the BSD 2-clause license. */
 
+#ifndef _UECC_TYPES_H_
+#define _UECC_TYPES_H_
+
+#ifndef MG_UECC_PLATFORM
+#if defined(__AVR__) && __AVR__
+#define MG_UECC_PLATFORM mg_uecc_avr
+#elif defined(__thumb2__) || \
+    defined(_M_ARMT) /* I think MSVC only supports Thumb-2 targets */
+#define MG_UECC_PLATFORM mg_uecc_arm_thumb2
+#elif defined(__thumb__)
+#define MG_UECC_PLATFORM mg_uecc_arm_thumb
+#elif defined(__arm__) || defined(_M_ARM)
+#define MG_UECC_PLATFORM mg_uecc_arm
+#elif defined(__aarch64__)
+#define MG_UECC_PLATFORM mg_uecc_arm64
+#elif defined(__i386__) || defined(_M_IX86) || defined(_X86_) || \
+    defined(__I86__)
+#define MG_UECC_PLATFORM mg_uecc_x86
+#elif defined(__amd64__) || defined(_M_X64)
+#define MG_UECC_PLATFORM mg_uecc_x86_64
+#else
+#define MG_UECC_PLATFORM mg_uecc_arch_other
+#endif
+#endif
+
+#ifndef MG_UECC_ARM_USE_UMAAL
+#if (MG_UECC_PLATFORM == mg_uecc_arm) && (__ARM_ARCH >= 6)
+#define MG_UECC_ARM_USE_UMAAL 1
+#elif (MG_UECC_PLATFORM == mg_uecc_arm_thumb2) && (__ARM_ARCH >= 6) && \
+    (!defined(__ARM_ARCH_7M__) || !__ARM_ARCH_7M__)
+#define MG_UECC_ARM_USE_UMAAL 1
+#else
+#define MG_UECC_ARM_USE_UMAAL 0
+#endif
+#endif
+
+#ifndef MG_UECC_WORD_SIZE
+#if MG_UECC_PLATFORM == mg_uecc_avr
+#define MG_UECC_WORD_SIZE 1
+#elif (MG_UECC_PLATFORM == mg_uecc_x86_64 || MG_UECC_PLATFORM == mg_uecc_arm64)
+#define MG_UECC_WORD_SIZE 8
+#else
+#define MG_UECC_WORD_SIZE 4
+#endif
+#endif
+
+#if (MG_UECC_WORD_SIZE != 1) && (MG_UECC_WORD_SIZE != 4) && \
+    (MG_UECC_WORD_SIZE != 8)
+#error "Unsupported value for MG_UECC_WORD_SIZE"
+#endif
+
+#if ((MG_UECC_PLATFORM == mg_uecc_avr) && (MG_UECC_WORD_SIZE != 1))
+#pragma message("MG_UECC_WORD_SIZE must be 1 for AVR")
+#undef MG_UECC_WORD_SIZE
+#define MG_UECC_WORD_SIZE 1
+#endif
+
+#if ((MG_UECC_PLATFORM == mg_uecc_arm ||         \
+      MG_UECC_PLATFORM == mg_uecc_arm_thumb ||   \
+      MG_UECC_PLATFORM == mg_uecc_arm_thumb2) && \
+     (MG_UECC_WORD_SIZE != 4))
+#pragma message("MG_UECC_WORD_SIZE must be 4 for ARM")
+#undef MG_UECC_WORD_SIZE
+#define MG_UECC_WORD_SIZE 4
+#endif
+
+typedef int8_t wordcount_t;
+typedef int16_t bitcount_t;
+typedef int8_t cmpresult_t;
+
+#if (MG_UECC_WORD_SIZE == 1)
+
+typedef uint8_t mg_uecc_word_t;
+typedef uint16_t mg_uecc_dword_t;
+
+#define HIGH_BIT_SET 0x80
+#define MG_UECC_WORD_BITS 8
+#define MG_UECC_WORD_BITS_SHIFT 3
+#define MG_UECC_WORD_BITS_MASK 0x07
+
+#elif (MG_UECC_WORD_SIZE == 4)
+
+typedef uint32_t mg_uecc_word_t;
+typedef uint64_t mg_uecc_dword_t;
+
+#define HIGH_BIT_SET 0x80000000
+#define MG_UECC_WORD_BITS 32
+#define MG_UECC_WORD_BITS_SHIFT 5
+#define MG_UECC_WORD_BITS_MASK 0x01F
+
+#elif (MG_UECC_WORD_SIZE == 8)
+
+typedef uint64_t mg_uecc_word_t;
+
+#define HIGH_BIT_SET 0x8000000000000000U
+#define MG_UECC_WORD_BITS 64
+#define MG_UECC_WORD_BITS_SHIFT 6
+#define MG_UECC_WORD_BITS_MASK 0x03F
+
+#endif /* MG_UECC_WORD_SIZE */
+
+#endif /* _UECC_TYPES_H_ */
+
+/* Copyright 2015, Kenneth MacKay. Licensed under the BSD 2-clause license. */
+
 #ifndef _UECC_VLI_H_
 #define _UECC_VLI_H_
 
@@ -1854,111 +1937,117 @@ int mg_uecc_generate_random_int(mg_uecc_word_t *random,
 
 #endif /* _UECC_VLI_H_ */
 
-/* Copyright 2015, Kenneth MacKay. Licensed under the BSD 2-clause license. */
-
-#ifndef _UECC_TYPES_H_
-#define _UECC_TYPES_H_
-
-#ifndef MG_UECC_PLATFORM
-#if defined(__AVR__) && __AVR__
-#define MG_UECC_PLATFORM mg_uecc_avr
-#elif defined(__thumb2__) || \
-    defined(_M_ARMT) /* I think MSVC only supports Thumb-2 targets */
-#define MG_UECC_PLATFORM mg_uecc_arm_thumb2
-#elif defined(__thumb__)
-#define MG_UECC_PLATFORM mg_uecc_arm_thumb
-#elif defined(__arm__) || defined(_M_ARM)
-#define MG_UECC_PLATFORM mg_uecc_arm
-#elif defined(__aarch64__)
-#define MG_UECC_PLATFORM mg_uecc_arm64
-#elif defined(__i386__) || defined(_M_IX86) || defined(_X86_) || \
-    defined(__I86__)
-#define MG_UECC_PLATFORM mg_uecc_x86
-#elif defined(__amd64__) || defined(_M_X64)
-#define MG_UECC_PLATFORM mg_uecc_x86_64
-#else
-#define MG_UECC_PLATFORM mg_uecc_arch_other
-#endif
-#endif
-
-#ifndef MG_UECC_ARM_USE_UMAAL
-#if (MG_UECC_PLATFORM == mg_uecc_arm) && (__ARM_ARCH >= 6)
-#define MG_UECC_ARM_USE_UMAAL 1
-#elif (MG_UECC_PLATFORM == mg_uecc_arm_thumb2) && (__ARM_ARCH >= 6) && \
-    (!defined(__ARM_ARCH_7M__) || !__ARM_ARCH_7M__)
-#define MG_UECC_ARM_USE_UMAAL 1
-#else
-#define MG_UECC_ARM_USE_UMAAL 0
-#endif
-#endif
-
-#ifndef MG_UECC_WORD_SIZE
-#if MG_UECC_PLATFORM == mg_uecc_avr
-#define MG_UECC_WORD_SIZE 1
-#elif (MG_UECC_PLATFORM == mg_uecc_x86_64 || MG_UECC_PLATFORM == mg_uecc_arm64)
-#define MG_UECC_WORD_SIZE 8
-#else
-#define MG_UECC_WORD_SIZE 4
-#endif
-#endif
-
-#if (MG_UECC_WORD_SIZE != 1) && (MG_UECC_WORD_SIZE != 4) && \
-    (MG_UECC_WORD_SIZE != 8)
-#error "Unsupported value for MG_UECC_WORD_SIZE"
-#endif
-
-#if ((MG_UECC_PLATFORM == mg_uecc_avr) && (MG_UECC_WORD_SIZE != 1))
-#pragma message("MG_UECC_WORD_SIZE must be 1 for AVR")
-#undef MG_UECC_WORD_SIZE
-#define MG_UECC_WORD_SIZE 1
-#endif
-
-#if ((MG_UECC_PLATFORM == mg_uecc_arm ||         \
-      MG_UECC_PLATFORM == mg_uecc_arm_thumb ||   \
-      MG_UECC_PLATFORM == mg_uecc_arm_thumb2) && \
-     (MG_UECC_WORD_SIZE != 4))
-#pragma message("MG_UECC_WORD_SIZE must be 4 for ARM")
-#undef MG_UECC_WORD_SIZE
-#define MG_UECC_WORD_SIZE 4
-#endif
-
-typedef int8_t wordcount_t;
-typedef int16_t bitcount_t;
-typedef int8_t cmpresult_t;
-
-#if (MG_UECC_WORD_SIZE == 1)
-
-typedef uint8_t mg_uecc_word_t;
-typedef uint16_t mg_uecc_dword_t;
-
-#define HIGH_BIT_SET 0x80
-#define MG_UECC_WORD_BITS 8
-#define MG_UECC_WORD_BITS_SHIFT 3
-#define MG_UECC_WORD_BITS_MASK 0x07
-
-#elif (MG_UECC_WORD_SIZE == 4)
-
-typedef uint32_t mg_uecc_word_t;
-typedef uint64_t mg_uecc_dword_t;
-
-#define HIGH_BIT_SET 0x80000000
-#define MG_UECC_WORD_BITS 32
-#define MG_UECC_WORD_BITS_SHIFT 5
-#define MG_UECC_WORD_BITS_MASK 0x01F
-
-#elif (MG_UECC_WORD_SIZE == 8)
-
-typedef uint64_t mg_uecc_word_t;
-
-#define HIGH_BIT_SET 0x8000000000000000U
-#define MG_UECC_WORD_BITS 64
-#define MG_UECC_WORD_BITS_SHIFT 6
-#define MG_UECC_WORD_BITS_MASK 0x03F
-
-#endif /* MG_UECC_WORD_SIZE */
-
-#endif /* _UECC_TYPES_H_ */
 // End of uecc BSD-2
+// portable8439 v1.0.1
+// Source: https://github.com/DavyLandman/portable8439
+// Licensed under CC0-1.0
+// Contains poly1305-donna e6ad6e091d30d7f4ec2d4f978be1fcfcbce72781 (Public
+// Domain)
+
+
+
+
+#ifndef __PORTABLE_8439_H
+#define __PORTABLE_8439_H
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
+// provide your own decl specificier like -DPORTABLE_8439_DECL=ICACHE_RAM_ATTR
+#ifndef PORTABLE_8439_DECL
+#define PORTABLE_8439_DECL
+#endif
+
+/*
+ This library implements RFC 8439 a.k.a. ChaCha20-Poly1305 AEAD
+
+ You can use this library to avoid attackers mutating or reusing your
+ encrypted messages. This does assume you never reuse a nonce+key pair and,
+ if possible, carefully pick your associated data.
+*/
+
+/* Make sure we are either nested in C++ or running in a C99+ compiler
+#if !defined(__cplusplus) && !defined(_MSC_VER) && \
+    (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L)
+#error "C99 or newer required"
+#endif */
+
+// #if CHAR_BIT > 8
+// #    error "Systems without native octals not suppoted"
+// #endif
+
+#if defined(_MSC_VER) || defined(__cplusplus)
+// add restrict support is possible
+#if (defined(_MSC_VER) && _MSC_VER >= 1900) || defined(__clang__) || \
+    defined(__GNUC__)
+#define restrict __restrict
+#else
+#define restrict
+#endif
+#endif
+
+#define RFC_8439_TAG_SIZE (16)
+#define RFC_8439_KEY_SIZE (32)
+#define RFC_8439_NONCE_SIZE (12)
+
+/*
+    Encrypt/Seal plain text bytes into a cipher text that can only be
+    decrypted by knowing the key, nonce and associated data.
+
+    input:
+        - key: RFC_8439_KEY_SIZE bytes that all parties have agreed
+            upon beforehand
+        - nonce: RFC_8439_NONCE_SIZE bytes that should never be repeated
+            for the same key. A counter or a pseudo-random value are fine.
+        - ad: associated data to include with calculating the tag of the
+            cipher text. Can be null for empty.
+        - plain_text: data to be encrypted, pointer + size should not overlap
+            with cipher_text pointer
+
+    output:
+        - cipher_text: encrypted plain_text with a tag appended. Make sure to
+            allocate at least plain_text_size + RFC_8439_TAG_SIZE
+
+    returns:
+        - size of bytes written to cipher_text, can be -1 if overlapping
+            pointers are passed for plain_text and cipher_text
+*/
+PORTABLE_8439_DECL size_t mg_chacha20_poly1305_encrypt(
+    uint8_t *restrict cipher_text, const uint8_t key[RFC_8439_KEY_SIZE],
+    const uint8_t nonce[RFC_8439_NONCE_SIZE], const uint8_t *restrict ad,
+    size_t ad_size, const uint8_t *restrict plain_text, size_t plain_text_size);
+
+/*
+    Decrypt/unseal cipher text given the right key, nonce, and additional data.
+
+    input:
+        - key: RFC_8439_KEY_SIZE bytes that all parties have agreed
+            upon beforehand
+        - nonce: RFC_8439_NONCE_SIZE bytes that should never be repeated for
+            the same key. A counter or a pseudo-random value are fine.
+        - ad: associated data to include with calculating the tag of the
+            cipher text. Can be null for empty.
+        - cipher_text: encrypted message.
+
+    output:
+        - plain_text: data to be encrypted, pointer + size should not overlap
+            with cipher_text pointer, leave at least enough room for
+            cipher_text_size - RFC_8439_TAG_SIZE
+
+    returns:
+        - size of bytes written to plain_text, -1 signals either:
+            - incorrect key/nonce/ad
+            - corrupted cipher_text
+            - overlapping pointers are passed for plain_text and cipher_text
+*/
+PORTABLE_8439_DECL size_t mg_chacha20_poly1305_decrypt(
+    uint8_t *restrict plain_text, const uint8_t key[RFC_8439_KEY_SIZE],
+    const uint8_t nonce[RFC_8439_NONCE_SIZE],
+    const uint8_t *restrict cipher_text, size_t cipher_text_size);
+#if defined(__cplusplus)
+}
+#endif
+#endif
 
 
 struct mg_connection;
@@ -2155,7 +2244,6 @@ int mg_http_get_var(const struct mg_str *, const char *name, char *, size_t);
 int mg_url_decode(const char *s, size_t n, char *to, size_t to_len, int form);
 size_t mg_url_encode(const char *s, size_t n, char *buf, size_t len);
 void mg_http_creds(struct mg_http_message *, char *, size_t, char *, size_t);
-bool mg_http_match_uri(const struct mg_http_message *, const char *glob);
 long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                     struct mg_fs *fs, const char *dir, size_t max_size);
 void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
@@ -2172,6 +2260,7 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
 #define MG_TLS_NONE 0     // No TLS support
 #define MG_TLS_MBED 1     // mbedTLS
 #define MG_TLS_OPENSSL 2  // OpenSSL
+#define MG_TLS_WOLFSSL 5  // WolfSSL (based on OpenSSL)
 #define MG_TLS_BUILTIN 3  // Built-in
 #define MG_TLS_CUSTOM 4   // Custom implementation
 
@@ -2239,7 +2328,7 @@ struct mg_tls {
 #endif
 
 
-#if MG_TLS == MG_TLS_OPENSSL
+#if MG_TLS == MG_TLS_OPENSSL || MG_TLS == MG_TLS_WOLFSSL
 
 #include <openssl/err.h>
 #include <openssl/ssl.h>
@@ -2284,6 +2373,8 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
 void mg_sntp_request(struct mg_connection *c);
 int64_t mg_sntp_parse(const unsigned char *buf, size_t len);
+
+uint64_t mg_now(void);     // Return milliseconds since Epoch
 
 
 
@@ -2361,6 +2452,7 @@ struct mg_mqtt_opts {
   uint8_t qos;                      // message quality of service
   uint8_t version;                  // Can be 4 (3.1.1), or 5. If 0, assume 4
   uint16_t keepalive;               // Keep-alive timer in seconds
+  uint16_t retransmit_id;           // For PUBLISH, init to 0
   bool retain;                      // Retain flag
   bool clean;                       // Clean session flag
   struct mg_mqtt_prop *props;       // MQTT5 props array
@@ -2387,7 +2479,7 @@ struct mg_connection *mg_mqtt_connect(struct mg_mgr *, const char *url,
 struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
 void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts);
-void mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts);
+uint16_t mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts);
 void mg_mqtt_sub(struct mg_connection *, const struct mg_mqtt_opts *opts);
 int mg_mqtt_parse(const uint8_t *, size_t, uint8_t, struct mg_mqtt_message *);
 void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags,
@@ -2501,6 +2593,7 @@ void mg_rpc_list(struct mg_rpc_req *r);
 
 #define MG_OTA_NONE 0      // No OTA support
 #define MG_OTA_FLASH 1     // OTA via an internal flash
+#define MG_OTA_ESP32 2     // ESP32 OTA implementation
 #define MG_OTA_CUSTOM 100  // Custom implementation
 
 #ifndef MG_OTA
@@ -2541,13 +2634,14 @@ MG_IRAM void mg_ota_boot(void);  // Bootloader function
 
 
 
-#define MG_DEVICE_NONE 0        // Dummy system
+#define MG_DEVICE_NONE 0  // Dummy system
+
 #define MG_DEVICE_STM32H5 1     // STM32 H5
 #define MG_DEVICE_STM32H7 2     // STM32 H7
-#define MG_DEVICE_RT1020 3      // IMXRT1020
-#define MG_DEVICE_RT1060 4      // IMXRT1060
 #define MG_DEVICE_CH32V307 100  // WCH CH32V307
 #define MG_DEVICE_U2A 200       // Renesas U2A16, U2A8, U2A6
+#define MG_DEVICE_RT1020 300    // IMXRT1020
+#define MG_DEVICE_RT1060 301    // IMXRT1060
 #define MG_DEVICE_CUSTOM 1000   // Custom implementation
 
 #ifndef MG_DEVICE
@@ -2588,6 +2682,16 @@ struct mg_tcpip_driver {
   bool (*up)(struct mg_tcpip_if *);                           // Up/down status
 };
 
+typedef void (*mg_tcpip_event_handler_t)(struct mg_tcpip_if *ifp, int ev,
+                                         void *ev_data);
+
+enum {
+  MG_TCPIP_EV_ST_CHG,     // state change             uint8_t * (&ifp->state)
+  MG_TCPIP_EV_DHCP_DNS,   // DHCP DNS assignment      uint32_t *ipaddr
+  MG_TCPIP_EV_DHCP_SNTP,  // DHCP SNTP assignment     uint32_t *ipaddr
+  MG_TCPIP_EV_USER        // Starting ID for user events
+};
+
 // Network interface
 struct mg_tcpip_if {
   uint8_t mac[6];                  // MAC address. Must be set to a valid MAC
@@ -2596,10 +2700,13 @@ struct mg_tcpip_if {
   bool enable_dhcp_client;         // Enable DCHP client
   bool enable_dhcp_server;         // Enable DCHP server
   bool enable_get_gateway;         // DCHP server sets client as gateway
+  bool enable_req_dns;             // DCHP client requests DNS server
+  bool enable_req_sntp;            // DCHP client requests SNTP server
   bool enable_crc32_check;         // Do a CRC check on RX frames and strip it
   bool enable_mac_check;           // Do a MAC check on RX frames
   struct mg_tcpip_driver *driver;  // Low level driver
   void *driver_data;               // Driver-specific data
+  mg_tcpip_event_handler_t fn;     // User-specified event handler function
   struct mg_mgr *mgr;              // Mongoose event manager
   struct mg_queue recv_queue;      // Receive queue
   uint16_t mtu;                    // Interface MTU
@@ -2634,6 +2741,8 @@ extern struct mg_tcpip_driver mg_tcpip_driver_imxrt;
 extern struct mg_tcpip_driver mg_tcpip_driver_same54;
 extern struct mg_tcpip_driver mg_tcpip_driver_cmsis;
 extern struct mg_tcpip_driver mg_tcpip_driver_ra;
+extern struct mg_tcpip_driver mg_tcpip_driver_xmc;
+extern struct mg_tcpip_driver mg_tcpip_driver_xmc7;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mg_tcpip_spi {
@@ -2867,8 +2976,14 @@ struct mg_tcpip_driver_stm32f_data {
 #endif
 
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_STM32H) && \
-    MG_ENABLE_DRIVER_STM32H
+#if MG_ENABLE_TCPIP
+#if !defined(MG_ENABLE_DRIVER_STM32H)
+#define MG_ENABLE_DRIVER_STM32H 0
+#endif
+#if !defined(MG_ENABLE_DRIVER_MCXN)
+#define MG_ENABLE_DRIVER_MCXN 0
+#endif
+#if MG_ENABLE_DRIVER_STM32H || MG_ENABLE_DRIVER_MCXN
 
 struct mg_tcpip_driver_stm32h_data {
   // MDC clock divider. MDC clock is derived from HCLK, must not exceed 2.5MHz
@@ -2881,7 +2996,8 @@ struct mg_tcpip_driver_stm32h_data {
   //    35-60 MHz     HCLK/26        3
   //    150-250 MHz   HCLK/102       4  <-- value for max speed HSI
   //    250-300 MHz   HCLK/124       5  <-- value for Nucleo-H* on CSI
-  //    110, 111 Reserved
+  //    300-500 MHz   HCLK/204       6
+  //    500-800 MHz   HCLK/324       7
   int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
 
   uint8_t phy_addr;  // PHY address
@@ -2913,6 +3029,7 @@ struct mg_tcpip_driver_stm32h_data {
   } while (0)
 
 #endif
+#endif
 
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_TM4C) && MG_ENABLE_DRIVER_TM4C
@@ -2939,8 +3056,87 @@ struct mg_tcpip_driver_tm4c_data {
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5500) && MG_ENABLE_DRIVER_W5500
 
-#undef MG_ENABLE_TCPIP_DRIVER_INIT
-#define MG_ENABLE_TCPIP_DRIVER_INIT 0
+#endif
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC7) && MG_ENABLE_DRIVER_XMC7
+
+struct mg_tcpip_driver_xmc7_data {
+  int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
+  uint8_t phy_addr;
+};
+
+#ifndef MG_TCPIP_PHY_ADDR
+#define MG_TCPIP_PHY_ADDR 0
+#endif
+
+#ifndef MG_DRIVER_MDC_CR
+#define MG_DRIVER_MDC_CR 3
+#endif
+
+#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+  do {                                                            \
+    static struct mg_tcpip_driver_xmc7_data driver_data_;       \
+    static struct mg_tcpip_if mif_;                               \
+    driver_data_.mdc_cr = MG_DRIVER_MDC_CR;                       \
+    driver_data_.phy_addr = MG_TCPIP_PHY_ADDR;                    \
+    mif_.ip = MG_TCPIP_IP;                                        \
+    mif_.mask = MG_TCPIP_MASK;                                    \
+    mif_.gw = MG_TCPIP_GW;                                        \
+    mif_.driver = &mg_tcpip_driver_xmc7;                        \
+    mif_.driver_data = &driver_data_;                             \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    mg_tcpip_init(mgr, &mif_);                                    \
+    MG_INFO(("Driver: xmc7, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+#endif
+
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC) && MG_ENABLE_DRIVER_XMC
+
+struct mg_tcpip_driver_xmc_data {
+  // 13.2.8.1 Station Management Functions
+  // MDC clock divider (). MDC clock is derived from ETH MAC clock
+  // It must not exceed 2.5MHz
+  // ETH Clock range  DIVIDER       mdc_cr VALUE
+  // --------------------------------------------
+  //                                     -1  <-- tell driver to guess the value
+  // 60-100 MHz       ETH Clock/42        0
+  // 100-150 MHz      ETH Clock/62        1
+  // 20-35 MHz        ETH Clock/16        2
+  // 35-60 MHz        ETH Clock/26        3
+  // 150-250 MHz      ETH Clock/102       4
+  // 250-300 MHz      ETH Clock/124       5
+  // 110, 111 Reserved
+  int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
+  uint8_t phy_addr;
+};
+
+#ifndef MG_TCPIP_PHY_ADDR
+#define MG_TCPIP_PHY_ADDR 0
+#endif
+
+#ifndef MG_DRIVER_MDC_CR
+#define MG_DRIVER_MDC_CR 4
+#endif
+
+#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+  do {                                                            \
+    static struct mg_tcpip_driver_xmc_data driver_data_;       \
+    static struct mg_tcpip_if mif_;                               \
+    driver_data_.mdc_cr = MG_DRIVER_MDC_CR;                       \
+    driver_data_.phy_addr = MG_TCPIP_PHY_ADDR;                    \
+    mif_.ip = MG_TCPIP_IP;                                        \
+    mif_.mask = MG_TCPIP_MASK;                                    \
+    mif_.gw = MG_TCPIP_GW;                                        \
+    mif_.driver = &mg_tcpip_driver_xmc;                        \
+    mif_.driver_data = &driver_data_;                             \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    mg_tcpip_init(mgr, &mif_);                                    \
+    MG_INFO(("Driver: xmc, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
 
 #endif
 

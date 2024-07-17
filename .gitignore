@@ -54,3 +54,4 @@ dkms.conf
 #My own added stuff coz ong
 out/
 test/
+include/pg_config_ext.h

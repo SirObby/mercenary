@@ -8,5 +8,8 @@ pkgs.mkShellNoCC {
     clang
     cmake
     pkg-config
+#    libpqxx
+#    postgresql.lib
+    postgresql
   ];
 }
