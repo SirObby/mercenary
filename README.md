@@ -6,19 +6,8 @@ An optimization and performance focused ActivityPub server, using [mongoose](htt
 - [ ] Database (For now we will simply be using postgresql.)
 - [ ] Configuration system
 - [ ] ActivityPub
+- [ ] Webfinger
 - [ ] Oauth2
-
-## ActivityPub Implemented fields:
-- [ ] Actor
-- [ ] Inbox
-- [ ] Outbox
-- [ ] Followers Collection
-- [ ] Following Collection
-- [ ] Liked Collection
-- [ ] Public Addressing
-- [ ] Likes Collection
-- [ ] Shares Collection
-- [ ] Activities (i.e. Notes)
 
 ## Why NixOS sucks for development using PostgreSQL on C.
 
