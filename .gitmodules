@@ -1,6 +1,4 @@
 [submodule "libs/mongoose"]
 	path = libs/mongoose
 	url = https://github.com/cesanta/mongoose.git
-[submodule "libs/postgresql"]
-	path = libs/postgresql
-	url = git://git.postgresql.org/git/postgresql.git
+	
