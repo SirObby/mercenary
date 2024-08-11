@@ -1,10 +1,9 @@
 #include "mongoose.h"   
-#include "constants.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
-#include "database/db.h"
+#include "database/con.h"
 
 #include <pub.h>
 
@@ -15,6 +14,9 @@ void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     if (mg_match(hm->uri, mg_str("/@*"), NULL)) { 
       mg_http_reply(c, 200, "", "{\"result\": \"%.*s\"}\n", (int) hm->uri.len,
                     hm->uri.buf);
+    } else if (mg_match(hm->uri, mg_str("/json/*"), NULL)) { 
+      mg_http_reply(c, 200, "", "{\"result\": \"%.*s\"}\n", (int) hm->uri.len,
+                    hm->uri.buf);
     } else {
     struct mg_http_serve_opts opts = { .root_dir = "./public/" };
     mg_http_serve_dir(c, hm, &opts);
@@ -22,7 +24,7 @@ void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
-int main(void) {
+int main(int argc, char** argv) {
 
   struct mg_mgr mgr;  // Declare event manager
   mg_mgr_init(&mgr);  // Initialise event manager

@@ -12,5 +12,6 @@ pkgs.mkShellNoCC {
 #    postgresql.lib
     postgresql
     json_c
+    gdb
   ];
 }

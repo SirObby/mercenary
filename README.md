@@ -3,9 +3,18 @@ An optimization and performance focused ActivityPub server, using [mongoose](htt
 
 ## Progress
 - [x] HTTP backend server (mongoose.c, my beloved)
-- [ ] Database (For now we will simply be using postgresql.)
 - [ ] Configuration system
 - [ ] ActivityPub
+    - [ ] Inbox/Outbox
+    - [ ] Activities
+    - [ ] Actors
+- [ ] Database
+    - [ ] PostgreSQL
+    - [ ] Actor objects.
+    - [ ] Activities.
+    - [ ] Custom implementation
+        - [ ] Storage
+- [ ] Storage
 - [ ] Webfinger
 - [ ] Oauth2
 
