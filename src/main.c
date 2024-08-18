@@ -6,12 +6,13 @@
 #include "database/con.h"
 
 #include <pub.h>
+#include <api.h>
 
 // HTTP server event handler function
 void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_match(hm->uri, mg_str("/@*"), NULL)) { 
+    /*if (mg_match(hm->uri, mg_str("/@*"), NULL)) { 
       mg_http_reply(c, 200, "", "{\"result\": \"%.*s\"}\n", (int) hm->uri.len,
                     hm->uri.buf);
     } else if (mg_match(hm->uri, mg_str("/json/*"), NULL)) { 
@@ -20,6 +21,9 @@ void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     } else {
     struct mg_http_serve_opts opts = { .root_dir = "./public/" };
     mg_http_serve_dir(c, hm, &opts);
+    }*/
+    if (mg_match(hm->uri, mg_str("/api/*"), NULL)) {
+      receive_api_call(hm, c);
     }
   }
 }
