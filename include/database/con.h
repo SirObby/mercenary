@@ -8,7 +8,8 @@
 
 #include <libpq-fe.h>
 
-#include <json.h>
+#include <json-c/json.h>
+
 
 typedef struct database_user
 {

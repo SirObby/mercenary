@@ -10,3 +10,5 @@ add_executable(${PROJECT_NAME} ${source_list})
 target_include_directories(${PROJECT_NAME} PUBLIC "include" )
 
 target_link_libraries(${PROJECT_NAME} pthread pq json-c::json-c)
+
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I/usr/include/postgresql")

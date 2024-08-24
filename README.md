@@ -1,6 +1,13 @@
 # mercenary
 An optimization and performance focused ActivityPub server, using [mongoose](https://github.com/cesanta/mongoose) (found in mongoose.c and mongoose.h)
 
+## Prerequisites:
+### Debian
+- libjson-c-dev
+- libpq-dev
+### Nix
+bro just use the shell.nix
+
 ## Progress
 - [x] HTTP backend server (mongoose.c, my beloved)
 - [ ] Configuration system
