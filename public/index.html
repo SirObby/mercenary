@@ -1,15 +1,53 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mercenary</title>
+    <title>mercenary</title>
 </head>
-<body>
-    
-    <h1>Hello there.</h1>
 
-    <a href="/@samuel">Test link</a>
+<body>
+    <script type="module">
+
+        import { h, render } from 'https://esm.sh/preact';
+        import htm from 'https://esm.sh/htm';
+
+        // Initialize htm with Preact
+        const html = htm.bind(h);
+
+        function Navbar() {
+            return html`<div>
+    <li>
+      <a href="/">mercenary</a>
+    </li>
+    <li>
+      <a href="/this">this instance</a>
+    </li>
+    <li>
+      <a href="/about">about</a>
+    </li>
+    |
+    <li>
+      <a href="/home">home</a>
+    </li>
+    <li>
+      <a href="/notifs">notifications</a>
+    </li>
+    <li>
+      <a href="/login">login</a>
+    </li>
+  </div>`;
+        }
+
+        function App(props) {
+            return html`<${Navbar}/> <h1>${props.name}</h1>`;
+        }
+
+        render(html`<${App} name="Federated feed." />`, document.body);
+
+    </script>
 
 </body>
+
 </html>

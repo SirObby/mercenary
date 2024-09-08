@@ -28,3 +28,6 @@ bro just use the shell.nix
 ## Why NixOS sucks for development using PostgreSQL on C.
 
 [libpq isn't a fucking package.](https://github.com/NixOS/nixpkgs/issues/61580).
+
+## eee
+https://www.w3.org/wiki/ActivityPub/Primer
